@@ -124,13 +124,13 @@ class Diffusion:
         # print("sqrt_alpha_bar_shape",self.sqrt_alphas_bar.shape)
         # print("sqrt_one_minus_alpha_bar_shape",self.sqrt_one_minus_alphas_bar.shape)
         # print("noise_shape",noise.shape)
-        print("x_zero_shape",x_zero.shape)
+        # print("x_zero_shape",x_zero.shape)
         # print("t",t)
         sqrt_alpha_bar_t = self.sqrt_alphas_bar[t].view(-1, 1, 1, 1).to(device)
         sqrt_one_minus_alpha_bar_t = self.sqrt_one_minus_alphas_bar[t].view(-1, 1, 1, 1).to(device)
        
-        print("sqrt_alpha_bar_t",sqrt_alpha_bar_t.shape)
-        print("sqrt_one_minus_alpha_bar_t",sqrt_one_minus_alpha_bar_t.shape)
+        # print("sqrt_alpha_bar_t",sqrt_alpha_bar_t.shape)
+        # print("sqrt_one_minus_alpha_bar_t",sqrt_one_minus_alpha_bar_t.shape)
         # print("x_zero",x_zero.is_cuda)
 
         return sqrt_alpha_bar_t * x_zero + sqrt_one_minus_alpha_bar_t * noise
