@@ -74,12 +74,13 @@ def sample_and_save_images(n_images, diffusor, model, device, store_path,reverse
     )
     os.makedirs(store_path, exist_ok=True)
     # fig = plt.figure(figsize=(10, 10))
+    plt.subplots(n_images//2, 2, figsize=(10, 10))
     for i in range(len(generated_images)):
-        
+        plt.subplot(n_images//2, 2, i+1)
         plt.imshow(reverse_transform(generated_images[i].cpu()))
         
-        plt.savefig(os.path.join(store_path, f"generated_image_{i}.png"))
-        
+    plt.savefig(os.path.join(store_path, f"generated_image_{i}.png"))
+    
 
     
     print(f"Generated images saved to {store_path}")
@@ -125,12 +126,12 @@ def train(model, trainloader, optimizer, diffusor, epoch, device, args):
             break
 
 
-def test_vis(model, testloader, diffusor, device, args):
+def test_vis(model, testloader, diffusor, device,reverse_transform, args):
     # TODO (2.2): implement testing functionality, including generation of stored images.
     test_without_vis(model, testloader, diffusor, device, args)
     # Generate and save test images
     store_path = f"./results/{args.run_name}"
-    sample_and_save_images(8, diffusor, model, device, store_path)
+    sample_and_save_images(8, diffusor, model, device, store_path,reverse_transform)
 
 
 
@@ -174,7 +175,7 @@ def run(args):
 
     for epoch in range(epochs):
         train(model, trainloader, optimizer, diffusor, epoch, device, args)
-        test_without_vis(model, valloader, diffusor, device, args)
+        test_vis(model, valloader, diffusor, device,reverse_transform, args)
 
     test_vis(model, testloader, diffusor, device, args)
 
@@ -190,5 +191,4 @@ def run(args):
 
 if __name__ == '__main__':
     args = parse_args()
-    # TODO (2.2): Add visualization capabilities
     run(args)
