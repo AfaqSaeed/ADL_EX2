@@ -63,7 +63,7 @@ def visualize_diffusion(images, diffusor, timesteps, store_path, reverse_transfo
     print(f"Visualization saved to {store_path}")
 
 
-def sample_and_save_images(n_images, diffusor, model, device, store_path,reverse_transform):
+def sample_and_save_images(n_images, diffusor, model, device, store_path,reverse_transform,epoch):
     # TODO: Implement - adapt code and method signature as needed
     model.eval()  # Set model to evaluation mode
     generated_images = diffusor.sample(
@@ -78,9 +78,9 @@ def sample_and_save_images(n_images, diffusor, model, device, store_path,reverse
     for i in range(len(generated_images)):
         plt.subplot(n_images//2, 2, i+1)
         plt.imshow(reverse_transform(generated_images[i].cpu()))
-        
-    plt.savefig(os.path.join(store_path, f"generated_image_{i}.png"))
-    
+            
+    plt.savefig(os.path.join(store_path, f"Epoch_{epoch}_generated_image_{i}.png"))
+    plt.close()
 
     
     print(f"Generated images saved to {store_path}")
@@ -126,12 +126,12 @@ def train(model, trainloader, optimizer, diffusor, epoch, device, args):
             break
 
 
-def test_vis(model, testloader, diffusor, device,reverse_transform, args):
+def test_vis(model, testloader, diffusor, device,reverse_transform, args,epoch=None):
     # TODO (2.2): implement testing functionality, including generation of stored images.
     test_without_vis(model, testloader, diffusor, device, args)
     # Generate and save test images
     store_path = f"./results/{args.run_name}"
-    sample_and_save_images(8, diffusor, model, device, store_path,reverse_transform)
+    sample_and_save_images(8, diffusor, model, device, store_path,reverse_transform,epoch)
 
 
 
@@ -144,7 +144,7 @@ def run(args):
     device = "cuda" if not args.no_cuda and torch.cuda.is_available() else "cpu"
 
     model = Unet(dim=image_size, channels=channels, dim_mults=(1, 2, 4,)).to(device)
-    # model.load_state_dict(torch.load(os.path.join(r"C:\Study\Advanced Deep Learning\Exercises\Exercise 2\models", args.run_name, f"ckpt.pt"),weights_only=True))
+    model.load_state_dict(torch.load(os.path.join(r"C:\Study\Advanced Deep Learning\Exercises\Exercise 2\models", args.run_name, f"ckpt.pt"),weights_only=True))
     optimizer = AdamW(model.parameters(), lr=args.lr)
 
     my_scheduler = lambda x: linear_beta_schedule(0.0001, 0.02, x)
@@ -175,7 +175,7 @@ def run(args):
 
     for epoch in range(epochs):
         train(model, trainloader, optimizer, diffusor, epoch, device, args)
-        test_vis(model, valloader, diffusor, device,reverse_transform, args)
+        test_vis(model, valloader, diffusor, device,reverse_transform, args,epoch)
 
     test_vis(model, testloader, diffusor, device, args)
 
