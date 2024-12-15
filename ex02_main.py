@@ -20,7 +20,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train a neural network to diffuse images')
     parser.add_argument('--batch_size', type=int, default=64, help='input batch size for training (default: 64)')
     parser.add_argument('--timesteps', type=int, default=100, help='number of timesteps for diffusion model (default: 100)')
-    parser.add_argument('--epochs', type=int, default=100, help='number of epochs to train (default: 5)')
+    parser.add_argument('--epochs', type=int, default=1, help='number of epochs to train (default: 5)')
     parser.add_argument('--lr', type=float, default=0.003, help='learning rate (default: 0.003)')
     # parser.add_argument('--momentum', type=float, default=0.9, help='SGD momentum (default: 0.9)')
     parser.add_argument('--no_cuda', action='store_true', default=False, help='disables CUDA training')
@@ -146,10 +146,15 @@ def run(args):
     model = Unet(dim=image_size, channels=channels, dim_mults=(1, 2, 4,)).to(device)
     model_folder = os.path.join(r".\models", args.run_name)
     print(os.listdir(model_folder))
-    ## Find the latest model by looking the epoch number between the dashes
-    latest_model = max([os.path.join(model_folder, f) for f in os.listdir(model_folder) if f.endswith(".pt")], key=lambda x: int(x.split("_")[1].split("_")[0]))
-    epoch_start = int(latest_model.split("_")[1].split("_")[0])   
- 
+    if os.listdir(model_folder) == []:
+        print("No model found")
+        epoch_start = 0
+    
+    else:    
+        ## Find the latest model by looking the epoch number between the dashes
+        latest_model = max([os.path.join(model_folder, f) for f in os.listdir(model_folder) if f.endswith(".pt")], key=lambda x: int(x.split("_")[1].split("_")[0]))
+        epoch_start = int(latest_model.split("_")[1].split("_")[0])   
+    
     print(f"Loading model from {latest_model}")   
     model.load_state_dict(torch.load(latest_model,weights_only=True))
  
@@ -188,8 +193,9 @@ def run(args):
         model_save_path = os.path.join(r".\models", args.run_name, f"Epoch_{epoch_start+epoch}_ckpt.pt")
         print(f"Saving model to {model_save_path}")
         
-        # torch.save(model.state_dict(), model_save_path ))
+        torch.save(model.state_dict(), model_save_path )
         # Visualization
+    test_vis(model, testloader, diffusor, device,reverse_transform, args,epoch+epoch_start)
     save_path = r"C:\Study\Advanced Deep Learning\Exercises\Exercise 2\results"  # TODO: Adapt to your needs
     
     for images, _ in trainloader:
