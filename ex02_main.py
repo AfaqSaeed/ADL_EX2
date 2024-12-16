@@ -144,7 +144,7 @@ def run(args):
     device = "cuda" if not args.no_cuda and torch.cuda.is_available() else "cpu"
 
     model = Unet(dim=image_size, channels=channels, dim_mults=(1, 2, 4,)).to(device)
-    model_folder = os.path.join(r".\models", args.run_name)
+    model_folder = os.path.join(r"./models", args.run_name)
     print(os.listdir(model_folder))
     if os.listdir(model_folder) == []:
         print("No model found")
@@ -153,10 +153,10 @@ def run(args):
     else:    
         ## Find the latest model by looking the epoch number between the dashes
         latest_model = max([os.path.join(model_folder, f) for f in os.listdir(model_folder) if f.endswith(".pt")], key=lambda x: int(x.split("_")[1].split("_")[0]))
-        epoch_start = int(latest_model.split("_")[1].split("_")[0])   
+        epoch_start = int(latest_model.split("_")[1].split("_")[0])
     
-    print(f"Loading model from {latest_model}")   
-    model.load_state_dict(torch.load(latest_model,weights_only=True))
+        print(f"Loading model from {latest_model}")   
+        model.load_state_dict(torch.load(latest_model,weights_only=True))
  
     optimizer = AdamW(model.parameters(), lr=args.lr)
 
@@ -177,27 +177,25 @@ def run(args):
         ToPILImage(),
     ])
 
-    dataset = datasets.CIFAR10(r'C:\Study\Advanced Deep Learning\Exercises\Exercise 2\cifar10\train', download=True, train=True, transform=transform)
+    dataset = datasets.CIFAR10(r'../Train', download=True, train=True, transform=transform)
     trainset, valset = torch.utils.data.random_split(dataset, [int(len(dataset) * 0.9), len(dataset) - int(len(dataset) * 0.9)])
     trainloader = DataLoader(trainset, batch_size=batch_size, shuffle=True)
     valloader = DataLoader(valset, batch_size=batch_size, shuffle=False)
 
     # Download and load the test data
-    testset = datasets.CIFAR10(r'C:\Study\Advanced Deep Learning\Exercises\Exercise 2\cifar10\test', download=True, train=False, transform=transform)
+    testset = datasets.CIFAR10(r'../Test', download=True, train=False, transform=transform)
     testloader = DataLoader(testset, batch_size=int(batch_size/2), shuffle=True)
     
     for epoch in range(epochs):
         train(model, trainloader, optimizer, diffusor, epoch+epoch_start, device, args)
         test_vis(model, valloader, diffusor, device,reverse_transform, args,epoch+epoch_start)
 
-        model_save_path = os.path.join(r".\models", args.run_name, f"Epoch_{epoch_start+epoch}_ckpt.pt")
+        model_save_path = os.path.join(r"./models", args.run_name, f"Epoch_{epoch_start+epoch}_ckpt.pt")
         print(f"Saving model to {model_save_path}")
         
         torch.save(model.state_dict(), model_save_path )
         # Visualization
-    test_vis(model, testloader, diffusor, device,reverse_transform, args,epoch+epoch_start)
-    save_path = r"C:\Study\Advanced Deep Learning\Exercises\Exercise 2\results"  # TODO: Adapt to your needs
-    
+    save_path = r"./results"  # TODO: Adapt to your needs   
     for images, _ in trainloader:
         visualize_diffusion(images, diffusor, timesteps=timesteps, store_path=save_path,reverse_transform=reverse_transform)
         break
