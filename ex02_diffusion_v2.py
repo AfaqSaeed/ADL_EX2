@@ -19,7 +19,11 @@ def cosine_beta_schedule(timesteps, s=0.008):
     https://www.analyticsvidhya.com/blog/2024/07/noise-schedules-in-stable-diffusion/
     """
     # TODO (2.3): Implement cosine beta/variance schedule as discussed in the paper mentioned above
-    pass
+    steps = torch.arange(timesteps + 1, dtype=torch.float64) / timesteps
+    alphas = torch.cos((steps + s) / (1 + s) * torch.pi * 0.5) ** 2
+    alphas = alphas / alphas[0]
+    betas = 1 - (alphas[1:] / alphas[:-1])
+    return torch.clip(betas, 0.0001, 0.9999)
 
 
 def sigmoid_beta_schedule(beta_start, beta_end, timesteps):
@@ -29,7 +33,10 @@ def sigmoid_beta_schedule(beta_start, beta_end, timesteps):
     # TODO (2.3): Implement a sigmoidal beta schedule. Note: identify suitable limits of where you want to sample the sigmoid function.
     # Note that it saturates fairly fast for values -x << 0 << +x
 
-    pass
+    steps = torch.linspace(-6, 6, timesteps)
+    sigmoids = torch.sigmoid(steps)
+    betas = beta_start + (beta_end - beta_start) * sigmoids
+    return betas
 
 
 class Diffusion:
