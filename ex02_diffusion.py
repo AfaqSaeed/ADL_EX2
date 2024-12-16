@@ -45,11 +45,13 @@ class Diffusion:
         # define beta schedule
         self.betas = get_noise_schedule(self.timesteps)
         self.betas = self.betas.to(device)
+        
         # TODO (2.2): Compute the central values for the equation in the forward pass already here so you can quickly use them in the forward pass.
         # Note that the function torch.cumprod may be of help
 
         # define alphas
         self.alphas = 1.0 - self.betas
+        
         self.alpha_bars = torch.cumprod(self.alphas, dim=0).to(device)  # Cumulative product
 
 
@@ -57,9 +59,10 @@ class Diffusion:
         self.sqrt_alphas_bar = torch.sqrt(self.alpha_bars)
         self.sqrt_one_minus_alphas_bar = torch.sqrt(1 - self.alpha_bars)
         self.one_over_sqrt_alphas = 1 / torch.sqrt(self.alphas)
-        
+        self.sqrt_alphas = torch.sqrt(self.alphas)
         # calculations for posterior q(x_{t-1} | x_t, x_0)
-        self.posterior_variance = torch.sqrt(1 - self.alpha_bars)
+            
+        
 
     @torch.no_grad()
     def p_sample(self, model, x, t, t_index):
@@ -70,7 +73,7 @@ class Diffusion:
     
         # Compute the mean (Equation 11 in the paper)
         beta_t = self.betas[t_index].view(-1, 1, 1, 1)
-        sqrt_alpha_bar_t = self.sqrt_alphas_bar[t_index].view(-1, 1, 1, 1)
+        sqrt_alpha_t = self.sqrt_alphas[t_index].view(-1, 1, 1, 1)
         sqrt_one_minus_alpha_bar_t = self.sqrt_one_minus_alphas_bar[t_index].view(-1, 1, 1, 1)
         # print("predicted_noise",predicted_noise.is_cuda)
         # print("beta_t",beta_t.is_cuda)
@@ -81,13 +84,13 @@ class Diffusion:
 
     
         # Use our model (noise predictor) to predict the mean
-        mean = (1 / sqrt_alpha_bar_t) * (x - (beta_t * predicted_noise / sqrt_one_minus_alpha_bar_t ))
+        mean = (1 / sqrt_alpha_t) * (x - (beta_t * predicted_noise / sqrt_one_minus_alpha_bar_t ))
 
         # Add noise if not the last timestep
         if t_index > 0:
             noise = torch.randn_like(x)
-            posterior_variance = self.posterior_variance[t_index].view(-1, 1, 1, 1)
-            x_prev = mean + torch.sqrt(posterior_variance) * noise
+            beta_t = self.betas[t_index].view(-1, 1, 1, 1)
+            x_prev = mean + torch.sqrt(beta_t) * noise
         else:
             x_prev = mean
 
@@ -121,17 +124,9 @@ class Diffusion:
         noise = noise.to(device)
         x_zero = x_zero.to(device)
 
-        # print("sqrt_alpha_bar_shape",self.sqrt_alphas_bar.shape)
-        # print("sqrt_one_minus_alpha_bar_shape",self.sqrt_one_minus_alphas_bar.shape)
-        # print("noise_shape",noise.shape)
-        print("x_zero_shape",x_zero.shape)
-        # print("t",t)
         sqrt_alpha_bar_t = self.sqrt_alphas_bar[t].view(-1, 1, 1, 1).to(device)
         sqrt_one_minus_alpha_bar_t = self.sqrt_one_minus_alphas_bar[t].view(-1, 1, 1, 1).to(device)
        
-        print("sqrt_alpha_bar_t",sqrt_alpha_bar_t.shape)
-        print("sqrt_one_minus_alpha_bar_t",sqrt_one_minus_alpha_bar_t.shape)
-        # print("x_zero",x_zero.is_cuda)
 
         return sqrt_alpha_bar_t * x_zero + sqrt_one_minus_alpha_bar_t * noise
 

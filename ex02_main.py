@@ -20,7 +20,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train a neural network to diffuse images')
     parser.add_argument('--batch_size', type=int, default=64, help='input batch size for training (default: 64)')
     parser.add_argument('--timesteps', type=int, default=100, help='number of timesteps for diffusion model (default: 100)')
-    parser.add_argument('--epochs', type=int, default=5, help='number of epochs to train (default: 5)')
+    parser.add_argument('--epochs', type=int, default=1, help='number of epochs to train (default: 5)')
     parser.add_argument('--lr', type=float, default=0.003, help='learning rate (default: 0.003)')
     # parser.add_argument('--momentum', type=float, default=0.9, help='SGD momentum (default: 0.9)')
     parser.add_argument('--no_cuda', action='store_true', default=False, help='disables CUDA training')
@@ -63,7 +63,7 @@ def visualize_diffusion(images, diffusor, timesteps, store_path, reverse_transfo
     print(f"Visualization saved to {store_path}")
 
 
-def sample_and_save_images(n_images, diffusor, model, device, store_path,reverse_transform):
+def sample_and_save_images(n_images, diffusor, model, device, store_path,reverse_transform,epoch):
     # TODO: Implement - adapt code and method signature as needed
     model.eval()  # Set model to evaluation mode
     generated_images = diffusor.sample(
@@ -74,12 +74,13 @@ def sample_and_save_images(n_images, diffusor, model, device, store_path,reverse
     )
     os.makedirs(store_path, exist_ok=True)
     # fig = plt.figure(figsize=(10, 10))
+    plt.subplots(n_images//2, 2, figsize=(10, 10))
     for i in range(len(generated_images)):
-        
+        plt.subplot(n_images//2, 2, i+1)
         plt.imshow(reverse_transform(generated_images[i].cpu()))
-        
-        plt.savefig(os.path.join(store_path, f"generated_image_{i}.png"))
-        
+            
+    plt.savefig(os.path.join(store_path, f"Epoch_{epoch}_generated_image_{i}.png"))
+    plt.close()
 
     
     print(f"Generated images saved to {store_path}")
@@ -125,12 +126,12 @@ def train(model, trainloader, optimizer, diffusor, epoch, device, args):
             break
 
 
-def test_vis(model, testloader, diffusor, device, args):
+def test_vis(model, testloader, diffusor, device,reverse_transform, args,epoch=None):
     # TODO (2.2): implement testing functionality, including generation of stored images.
     test_without_vis(model, testloader, diffusor, device, args)
     # Generate and save test images
     store_path = f"./results/{args.run_name}"
-    sample_and_save_images(8, diffusor, model, device, store_path)
+    sample_and_save_images(8, diffusor, model, device, store_path,reverse_transform,epoch)
 
 
 
@@ -143,7 +144,20 @@ def run(args):
     device = "cuda" if not args.no_cuda and torch.cuda.is_available() else "cpu"
 
     model = Unet(dim=image_size, channels=channels, dim_mults=(1, 2, 4,)).to(device)
-    model.load_state_dict(torch.load(os.path.join(r"C:\Study\Advanced Deep Learning\Exercises\Exercise 2\models", args.run_name, f"ckpt.pt"),weights_only=True))
+    model_folder = os.path.join(r".\models", args.run_name)
+    print(os.listdir(model_folder))
+    if os.listdir(model_folder) == []:
+        print("No model found")
+        epoch_start = 0
+    
+    else:    
+        ## Find the latest model by looking the epoch number between the dashes
+        latest_model = max([os.path.join(model_folder, f) for f in os.listdir(model_folder) if f.endswith(".pt")], key=lambda x: int(x.split("_")[1].split("_")[0]))
+        epoch_start = int(latest_model.split("_")[1].split("_")[0])   
+    
+    print(f"Loading model from {latest_model}")   
+    model.load_state_dict(torch.load(latest_model,weights_only=True))
+ 
     optimizer = AdamW(model.parameters(), lr=args.lr)
 
     my_scheduler = lambda x: linear_beta_schedule(0.0001, 0.02, x)
@@ -171,18 +185,19 @@ def run(args):
     # Download and load the test data
     testset = datasets.CIFAR10(r'C:\Study\Advanced Deep Learning\Exercises\Exercise 2\cifar10\test', download=True, train=False, transform=transform)
     testloader = DataLoader(testset, batch_size=int(batch_size/2), shuffle=True)
+    
+    for epoch in range(epochs):
+        train(model, trainloader, optimizer, diffusor, epoch+epoch_start, device, args)
+        test_vis(model, valloader, diffusor, device,reverse_transform, args,epoch+epoch_start)
 
-    # for epoch in range(epochs):
-        # train(model, trainloader, optimizer, diffusor, epochs, device, args)
-        # test_without_vis(model, valloader, diffusor, device, args)
-
-    # test_vis(model, testloader, diffusor, device, args)
-
+        model_save_path = os.path.join(r".\models", args.run_name, f"Epoch_{epoch_start+epoch}_ckpt.pt")
+        print(f"Saving model to {model_save_path}")
+        
+        torch.save(model.state_dict(), model_save_path )
+        # Visualization
+    test_vis(model, testloader, diffusor, device,reverse_transform, args,epoch+epoch_start)
     save_path = r"C:\Study\Advanced Deep Learning\Exercises\Exercise 2\results"  # TODO: Adapt to your needs
-    n_images = 8
-    sample_and_save_images(n_images, diffusor, model, device, save_path,reverse_transform)
-    torch.save(model.state_dict(), os.path.join(r"C:\Study\Advanced Deep Learning\Exercises\Exercise 2\models", args.run_name, f"ckpt.pt"))
-    # Visualization
+    
     for images, _ in trainloader:
         visualize_diffusion(images, diffusor, timesteps=timesteps, store_path=save_path,reverse_transform=reverse_transform)
         break
@@ -190,5 +205,4 @@ def run(args):
 
 if __name__ == '__main__':
     args = parse_args()
-    # TODO (2.2): Add visualization capabilities
     run(args)
