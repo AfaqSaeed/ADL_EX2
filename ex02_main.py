@@ -10,7 +10,7 @@ from pathlib import Path
 import os
 import matplotlib.pyplot as plt
 from ex02_model import Unet
-from ex02_diffusion import Diffusion, linear_beta_schedule
+from ex02_diffusion_v2 import Diffusion, linear_beta_schedule, cosine_beta_schedule,sigmoid_beta_schedule
 from torchvision.utils import save_image
 
 import argparse
@@ -20,7 +20,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Train a neural network to diffuse images')
     parser.add_argument('--batch_size', type=int, default=64, help='input batch size for training (default: 64)')
     parser.add_argument('--timesteps', type=int, default=100, help='number of timesteps for diffusion model (default: 100)')
-    parser.add_argument('--epochs', type=int, default=1, help='number of epochs to train (default: 5)')
+    parser.add_argument('--epochs', type=int, default=2, help='number of epochs to train (default: 5)')
     parser.add_argument('--lr', type=float, default=0.003, help='learning rate (default: 0.003)')
     # parser.add_argument('--momentum', type=float, default=0.9, help='SGD momentum (default: 0.9)')
     parser.add_argument('--no_cuda', action='store_true', default=False, help='disables CUDA training')
@@ -45,12 +45,13 @@ def visualize_diffusion(images, diffusor, timesteps, store_path, reverse_transfo
     os.makedirs(store_path, exist_ok=True)
     images = images[:8]  # Use the first 8 images for visualization
     noise = torch.randn_like(images).to(images.device)
+    print(images.device)
 
     visualizations = []
     for t in range(0,timesteps,10):
         t_tensor = torch.full((images.size(0),), t, device=images.device).long()
         print(f"Visualizing timesteps: {t}")
-        noised_images = diffusor.q_sample(images, t_tensor, noise=noise, device="cpu")
+        noised_images = diffusor.q_sample(images, t_tensor, noise=noise)
         print(f"Shape of noised images: {noised_images.shape}")
 
         # Apply reverse_transform to convert back to human-readable format
@@ -81,8 +82,6 @@ def sample_and_save_images(n_images, diffusor, model, device, store_path,reverse
             
     plt.savefig(os.path.join(store_path, f"Epoch_{epoch}_generated_image_{i}.png"))
     plt.close()
-
-    
     print(f"Generated images saved to {store_path}")
 
 
@@ -142,9 +141,11 @@ def run(args):
     epochs = args.epochs
     batch_size = args.batch_size
     device = "cuda" if not args.no_cuda and torch.cuda.is_available() else "cpu"
-
+    print(f"device:{device}")
     model = Unet(dim=image_size, channels=channels, dim_mults=(1, 2, 4,)).to(device)
-    model_folder = os.path.join(r".\models", args.run_name)
+    
+    #model_folder = os.path.join(r".\models", args.run_name)
+    '''
     print(os.listdir(model_folder))
     if os.listdir(model_folder) == []:
         print("No model found")
@@ -157,11 +158,14 @@ def run(args):
     
     print(f"Loading model from {latest_model}")   
     model.load_state_dict(torch.load(latest_model,weights_only=True))
- 
+    '''
     optimizer = AdamW(model.parameters(), lr=args.lr)
 
-    my_scheduler = lambda x: linear_beta_schedule(0.0001, 0.02, x)
+    my_scheduler = lambda x: sigmoid_beta_schedule(0.0001, 0.2, x)
+    # my_scheduler = lambda x: linear_beta_schedule(0.0001, 0.02, x)
+    # my_scheduler = lambda x: cosine_beta_schedule(x)
     diffusor = Diffusion(timesteps, my_scheduler, image_size, device)
+    print(f"scheduler: {my_scheduler}")
 
     # define image transformations (e.g. using torchvision)
     transform = Compose([
@@ -177,28 +181,35 @@ def run(args):
         ToPILImage(),
     ])
 
-    dataset = datasets.CIFAR10(r'C:\Study\Advanced Deep Learning\Exercises\Exercise 2\cifar10\train', download=True, train=True, transform=transform)
+    dataset = datasets.CIFAR10(r'E:\MS_AI\Sem-III\ADL\Exercises\exercise_1\cifar10\cifar-10-batches-py', download=False, train=True, transform=transform)
     trainset, valset = torch.utils.data.random_split(dataset, [int(len(dataset) * 0.9), len(dataset) - int(len(dataset) * 0.9)])
     trainloader = DataLoader(trainset, batch_size=batch_size, shuffle=True)
     valloader = DataLoader(valset, batch_size=batch_size, shuffle=False)
 
     # Download and load the test data
-    testset = datasets.CIFAR10(r'C:\Study\Advanced Deep Learning\Exercises\Exercise 2\cifar10\test', download=True, train=False, transform=transform)
+    testset = datasets.CIFAR10(r'E:\MS_AI\Sem-III\ADL\Exercises\exercise_1\cifar10\cifar-10-batches-py', download=False, train=False, transform=transform)
     testloader = DataLoader(testset, batch_size=int(batch_size/2), shuffle=True)
-    
-    for epoch in range(epochs):
-        train(model, trainloader, optimizer, diffusor, epoch+epoch_start, device, args)
-        test_vis(model, valloader, diffusor, device,reverse_transform, args,epoch+epoch_start)
 
-        model_save_path = os.path.join(r".\models", args.run_name, f"Epoch_{epoch_start+epoch}_ckpt.pt")
+    for epoch in range(epochs):
+        train(model, trainloader, optimizer, diffusor, epoch, device, args)
+        test_vis(model, valloader, diffusor, device, reverse_transform,  args, epoch)
+	    
+        
+	    #model_save_path = os.path.join(r".\models", args.run_name, f"Epoch_{epoch_start+epoch}_ckpt.pt")
+        '''
         print(f"Saving model to {model_save_path}")
         
         torch.save(model.state_dict(), model_save_path )
-        # Visualization
-    test_vis(model, testloader, diffusor, device,reverse_transform, args,epoch+epoch_start)
-    save_path = r"C:\Study\Advanced Deep Learning\Exercises\Exercise 2\results"  # TODO: Adapt to your needs
-    
+	    '''
+
+    test_vis(model, testloader, diffusor, device, reverse_transform,  args, epoch)
+    save_path = r"E:\MS_AI\Sem-III\ADL\Exercises\ex02_code_skeleton\outputs"  # TODO: Adapt to your needs
+    n_images = 8
+    sample_and_save_images(n_images, diffusor, model,save_path, device,reverse_transform,epoch)
+    torch.save(model.state_dict(), os.path.join(r"E:\MS_AI\Sem-III\ADL\Exercises\ex02_code_skeleton\outputs", args.run_name, f"ckpt.pt"))
+
     for images, _ in trainloader:
+        images = images.to(device)
         visualize_diffusion(images, diffusor, timesteps=timesteps, store_path=save_path,reverse_transform=reverse_transform)
         break
 
