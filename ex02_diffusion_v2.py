@@ -2,7 +2,24 @@ import torch
 import torch.nn.functional as F
 from ex02_helpers import *
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
+def plot_beta_schedulers(timesteps):
+    linear_betas = linear_beta_schedule(0.0001, 0.02,timesteps)
+    cosine_betas = cosine_beta_schedule(timesteps)
+    sigmoid_betas = sigmoid_beta_schedule(0.0001, 0.2,timesteps)
+    
+    plt.figure(figsize=(10, 6))
+    plt.plot(linear_betas, label='Linear Schedule')
+    plt.plot(sigmoid_betas, label='Sigmoid Schedule')
+    plt.plot(cosine_betas[:-1], label='Cosine Schedule')  # Ensure same length for cosine
+
+    plt.xlabel("Timesteps")
+    plt.ylabel("Beta (Noise Variance)")
+    plt.title("Comparison of Beta Schedules")
+    plt.legend()
+    plt.grid()
+    plt.show()
 
 def linear_beta_schedule(beta_start, beta_end, timesteps):
     """
@@ -19,11 +36,15 @@ def cosine_beta_schedule(timesteps, s=0.008):
     https://www.analyticsvidhya.com/blog/2024/07/noise-schedules-in-stable-diffusion/
     """
     # TODO (2.3): Implement cosine beta/variance schedule as discussed in the paper mentioned above
-    steps = torch.arange(timesteps + 1, dtype=torch.float64) / timesteps
-    alphas = torch.cos((steps + s) / (1 + s) * torch.pi * 0.5) ** 2
+    steps = torch.linspace(0, timesteps, timesteps + 1, dtype=torch.float32)[:-1]  # Exclude endpoint
+    alphas = torch.cos(((steps / timesteps) + s) / (1 + s) * torch.pi / 2) ** 2    
     alphas = alphas / alphas[0]
     betas = 1 - (alphas[1:] / alphas[:-1])
-    return torch.clip(betas, 0.0001, 0.9999)
+    betas = torch.clamp(betas, min=0.0001, max=0.999)
+    return betas
+
+    
+
 
 
 def sigmoid_beta_schedule(beta_start, beta_end, timesteps):
@@ -32,11 +53,12 @@ def sigmoid_beta_schedule(beta_start, beta_end, timesteps):
     """
     # TODO (2.3): Implement a sigmoidal beta schedule. Note: identify suitable limits of where you want to sample the sigmoid function.
     # Note that it saturates fairly fast for values -x << 0 << +x
-
-    steps = torch.linspace(-6, 6, timesteps)
-    sigmoids = torch.sigmoid(steps)
-    betas = beta_start + (beta_end - beta_start) * sigmoids
+    s_limit = 6
+    t = torch.linspace(0, timesteps - 1, timesteps, dtype=torch.float32)
+    sigmoid_values = torch.sigmoid(-s_limit + (2 * t / (timesteps - 1)) * s_limit)
+    betas = beta_start + sigmoid_values * (beta_end - beta_start)
     return betas
+
 
 
 class Diffusion:
@@ -66,8 +88,8 @@ class Diffusion:
                     [torch.tensor([1.0], device=self.device), self.alpha_bar[:-1]])
 
         # calculations for diffusion q(x_t | x_{t-1}) and others
-        self.sqrt_alpha_bar = torch.sqrt(self.alpha_bar)
-        self.sqrt_one_minus_alpha_bar = torch.sqrt(1-self.alpha_bar)
+        self.sqrt_alpha_bar = torch.sqrt(self.alpha_bar).to(self.device)
+        self.sqrt_one_minus_alpha_bar = torch.sqrt(1-self.alpha_bar).to(self.device)
 
         # calculations for posterior q(x_{t-1} | x_t, x_0)
         self.posterior_variance = self.betas * (1.0 - self.alpha_bar_cumprod_prev) / (1.0 - self.alpha_bar)  # equivalent to At/As
@@ -110,10 +132,17 @@ class Diffusion:
     # forward diffusion (using the nice property)
     def q_sample(self, x_zero, t, noise=None):
         # TODO (2.2): Implement the forward diffusion process using the beta-schedule defined in the constructor; if noise is None, you will need to create a new noise vector, otherwise use the provided one.
+        
         if noise==None:
-            noise = torch.randn_like(x_zero)
+            noise = torch.randn_like(x_zero,dtype=torch.float32)
+        
+        t = t.clamp(0, self.timesteps - 1)
 
         sqrt_alpha_bar = self.sqrt_alpha_bar[t].view(-1, 1, 1, 1)
+        # sqrt_alpha_bar = extract(self.sqrt_alpha_bar,t,x_zero.shape)
+        # sqrt_one_minus_alpha_bar = extract(
+        #     self.sqrt_one_minus_alpha_bar, t, x_zero.shape
+        # )
         sqrt_one_minus_alpha_bar = self.sqrt_one_minus_alpha_bar[t].view(-1, 1, 1, 1)
         return  sqrt_alpha_bar*x_zero + sqrt_one_minus_alpha_bar*noise
         
@@ -122,9 +151,9 @@ class Diffusion:
         # TODO (2.2): compute the input to the network using the forward diffusion process and predict the noise using the model; if noise is None, you will need to create a new noise vector, otherwise use the provided one.
 
         if noise is None:
-            noise = torch.randn_like(x_zero)
+            noise = torch.randn_like(x_zero,dtype=torch.float32)
         
-        x_t = self.q_sample(x_zero, t, noise)
+        x_t = self.q_sample(x_zero, t, noise).to(torch.float32)
 
         # Predict noise using the model
         predicted_noise = denoise_model(x_t, t)
@@ -137,5 +166,9 @@ class Diffusion:
             loss = F.mse_loss(predicted_noise,noise)
         else:
             raise NotImplementedError()
-
         return loss
+
+if __name__=="__main__":
+    plot_beta_schedulers(100)   
+    # Parameters
+    

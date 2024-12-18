@@ -3,7 +3,7 @@ import torch
 import os
 from numpy.testing import assert_almost_equal
 
-from ex02_diffusion import Diffusion, linear_beta_schedule
+from ex02_diffusion_v2 import Diffusion, linear_beta_schedule
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
