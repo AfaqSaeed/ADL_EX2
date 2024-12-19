@@ -28,19 +28,29 @@ def linear_beta_schedule(beta_start, beta_end, timesteps):
     return torch.linspace(beta_start, beta_end, timesteps)
 
 
-# TODO: Transform into task for students
-def cosine_beta_schedule(timesteps, s=0.008):
-    """
-    cosine schedule as proposed in https://arxiv.org/abs/2102.09672
-    also read:
-    https://www.analyticsvidhya.com/blog/2024/07/noise-schedules-in-stable-diffusion/
-    """
-    # TODO (2.3): Implement cosine beta/variance schedule as discussed in the paper mentioned above
-    steps = torch.linspace(0, timesteps, timesteps + 1, dtype=torch.float32)[:-1]  # Exclude endpoint
-    alphas = torch.cos(((steps / timesteps) + s) / (1 + s) * torch.pi / 2) ** 2    
+# # TODO: Transform into task for students
+# def cosine_beta_schedule(timesteps, s=0.008):
+#     """
+#     cosine schedule as proposed in https://arxiv.org/abs/2102.09672
+#     also read:
+#     https://www.analyticsvidhya.com/blog/2024/07/noise-schedules-in-stable-diffusion/
+#     """
+#     # TODO (2.3): Implement cosine beta/variance schedule as discussed in the paper mentioned above
+#     steps = torch.linspace(0, timesteps, timesteps+1 , dtype=torch.float32)  # Exclude endpoint
+#     alphas = torch.cos((((steps / timesteps) + s) / (1 + s)) * torch.pi / 2) ** 2    
+#     alphas = alphas / alphas[0]
+#     betas = 1 - (alphas[1:] / alphas[:-1])
+#     betas = torch.clamp(betas, max=0.999)
+#     return betas
+def cosine_beta_schedule(n_timesteps, s=0.008):
+    timesteps = ( torch.arange(n_timesteps + 1, dtype=torch.float64) / n_timesteps + s
+    )
+    alphas = timesteps / (1 + s) * torch.pi / 2
+    alphas = torch.cos(alphas).pow(2)
     alphas = alphas / alphas[0]
-    betas = 1 - (alphas[1:] / alphas[:-1])
-    betas = torch.clamp(betas, min=0.0001, max=0.999)
+    betas = 1 - alphas[1:] / alphas[:-1]
+    betas = betas.clamp(max=0.2)
+
     return betas
 
     

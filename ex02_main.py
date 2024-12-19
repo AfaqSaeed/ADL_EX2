@@ -14,8 +14,17 @@ from ex02_diffusion_v2 import Diffusion, linear_beta_schedule, cosine_beta_sched
 from torchvision.utils import save_image
 
 import argparse
-
-
+def remove_files(directory_path):
+	try:
+        # List all files in the directory
+		for filename in os.listdir(directory_path):
+			file_path = os.path.join(directory_path, filename)
+            # Check if it is a file before removing
+			if os.path.isfile(file_path):
+				os.remove(file_path)
+		print("All files removed successfully.")
+	except Exception as e:
+		print(f"An error occurred: {e}")
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a neural network to diffuse images')
     parser.add_argument('--batch_size', type=int, default=64, help='input batch size for training (default: 64)')
@@ -56,7 +65,7 @@ def visualize_diffusion(images, diffusor, timesteps, store_path, reverse_transfo
 
         # Apply reverse_transform to convert back to human-readable format
         for img in noised_images:
-            visualizations.end(reverse_transform(img.cpu()))
+            visualizations.append(reverse_transform(img.cpu()))
 
     # Save images step-by-step as a grid
     for idx, img in enumerate(visualizations):
@@ -155,11 +164,11 @@ def run(args):
         epoch_start = int(latest_model.split("_")[1].split("_")[0])
         print(f"Loading model from {latest_model}")   
         model.load_state_dict(torch.load(latest_model,weights_only=True))
- 
-        optimizer = AdamW(model.parameters(), lr=args.lr)
+        remove_files(model_folder)
+    optimizer = AdamW(model.parameters(), lr=args.lr)
 
-    my_scheduler = lambda x: sigmoid_beta_schedule(0.0001, 0.2, x)
-    # my_scheduler = lambda x: linear_beta_schedule(0.0001, 0.02, x)
+    # my_scheduler = lambda x: sigmoid_beta_schedule(0.0001, 0.2, x)
+    my_scheduler = lambda x: linear_beta_schedule(0.0001, 0.2, x)
     # my_scheduler = lambda x: cosine_beta_schedule(x)
     diffusor = Diffusion(timesteps, my_scheduler, image_size, device)
     print(f"scheduler: {my_scheduler}")
@@ -186,28 +195,22 @@ def run(args):
 
     # Download and load the test data
     testset = datasets.CIFAR10(r'../Test', download=True, train=False, transform=transform)
-    testloader = DataLoader(testset, batch_size=int(batch_size/2), shuffle=True)        
-    model_save_path = os.path.join(r"./models", args.run_name, f"Epoch_{epoch_start+epoch}_ckpt.pt")
-    print(f"Saving model to {model_save_path}")
+    testloader = DataLoader(testset, batch_size=int(batch_size/2), shuffle=True)
         
-    torch.save(model.state_dict(), model_save_path )
         # Visualization
     save_path = r"./results"  # TODO: Adapt to your needs   
     for epoch in range(epochs):
         train(model, trainloader, optimizer, diffusor, epoch, device, args)
-        test_vis(model, valloader, diffusor, device, reverse_transform,  args, epoch)
-	    
-        
-	    model_save_path = os.path.join(r"./models", args.run_name, f"Epoch_{epoch_start+epoch}_ckpt.pt")
+        test_vis(model, valloader, diffusor, device, reverse_transform,  args, epoch_start+epoch)
+        model_save_path = os.path.join(r"./models", args.run_name, f"Epoch_{epoch_start+epoch}_ckpt.pt")
+        remove_files(model_folder)
         print(f"Saving model to {model_save_path}")
-        removefolder(models_save_path)
-        torch.save(model.state_dict(), model_save_path
+        torch.save(model.state_dict(), model_save_path)
     
     for images, _ in trainloader:
         images = images.to(device)
         visualize_diffusion(images, diffusor, timesteps=timesteps, store_path=save_path,reverse_transform=reverse_transform)
         break
-
 
 if __name__ == '__main__':
     args = parse_args()
