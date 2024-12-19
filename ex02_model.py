@@ -214,7 +214,10 @@ class Unet(nn.Module):
         )
 
         # TODO: Implement a class embedder for the conditional part of the classifier-free guidance & define a default
-
+        # class embeddings
+        if num_classes is not None:
+            self.class_embed = nn.Embedding(num_classes, time_dim)  # +1 for the null token
+        
 
         # layers
         self.downs = nn.ModuleList([])
@@ -228,8 +231,8 @@ class Unet(nn.Module):
             self.downs.append(
                 nn.ModuleList(
                     [
-                        block_klass(dim_in, dim_in, time_emb_dim=time_dim),
-                        block_klass(dim_in, dim_in, time_emb_dim=time_dim),
+                        block_klass(dim_in, dim_in, time_emb_dim=time_dim,classes_emb_dim=time_dim),
+                        block_klass(dim_in, dim_in, time_emb_dim=time_dim,classes_emb_dim=time_dim),
                         Residual(PreNorm(dim_in, LinearAttention(dim_in))),
                         Downsample(dim_in, dim_out)
                         if not is_last
@@ -239,9 +242,9 @@ class Unet(nn.Module):
             )
 
         mid_dim = dims[-1]
-        self.mid_block1 = block_klass(mid_dim, mid_dim, time_emb_dim=time_dim)
+        self.mid_block1 = block_klass(mid_dim, mid_dim, time_emb_dim=time_dim,classes_emb_dim=time_dim)
         self.mid_attn = Residual(PreNorm(mid_dim, Attention(mid_dim)))
-        self.mid_block2 = block_klass(mid_dim, mid_dim, time_emb_dim=time_dim)
+        self.mid_block2 = block_klass(mid_dim, mid_dim, time_emb_dim=time_dim,classes_emb_dim=time_dim)
 
         for ind, (dim_in, dim_out) in enumerate(reversed(in_out)):
             is_last = ind == (len(in_out) - 1)
@@ -249,8 +252,8 @@ class Unet(nn.Module):
             self.ups.append(
                 nn.ModuleList(
                     [
-                        block_klass(dim_out + dim_in, dim_out, time_emb_dim=time_dim),
-                        block_klass(dim_out + dim_in, dim_out, time_emb_dim=time_dim),
+                        block_klass(dim_out + dim_in, dim_out, time_emb_dim=time_dim,classes_emb_dim=time_dim),
+                        block_klass(dim_out + dim_in, dim_out, time_emb_dim=time_dim,classes_emb_dim=time_dim),
                         Residual(PreNorm(dim_out, LinearAttention(dim_out))),
                         Upsample(dim_out, dim_in)
                         if not is_last
@@ -261,10 +264,10 @@ class Unet(nn.Module):
 
         self.out_dim = default(out_dim, channels)
 
-        self.final_res_block = block_klass(dim * 2, dim, time_emb_dim=time_dim)
+        self.final_res_block = block_klass(dim * 2, dim, time_emb_dim=time_dim,classes_emb_dim=time_dim)
         self.final_conv = nn.Conv2d(dim, self.out_dim, 1)
 
-    def forward(self, x, time):
+    def forward(self, x, time,labels=None):
 
         x = self.init_conv(x)
         r = x.clone()
@@ -275,35 +278,39 @@ class Unet(nn.Module):
         #  - for each element in the batch, the class embedding is replaced with the null token with a certain probability during training
         #  - during testing, you need to have control over whether the conditioning is applied or not
         #  - analogously to the time embedding, the class embedding is provided in every ResNet block as additional conditioning
+        if labels is not None and self.training:
+            if torch.rand(1).item() < self.p_uncond:
+                labels = torch.tensor([self.num_classes] * labels.size(0), device=labels.device)  # Use null token
+        c_emb = self.class_embed(labels) if labels is not None else 0
 
 
         h = []
 
         for block1, block2, attn, downsample in self.downs:
-            x = block1(x, t)
+            x = block1(x, t,c_emb)
             h.append(x)
 
-            x = block2(x, t)
+            x = block2(x, t,c_emb)
             x = attn(x)
             h.append(x)
 
             x = downsample(x)
 
-        x = self.mid_block1(x, t)
+        x = self.mid_block1(x, t,c_emb)
         x = self.mid_attn(x)
-        x = self.mid_block2(x, t)
+        x = self.mid_block2(x, t,c_emb)
 
         for block1, block2, attn, upsample in self.ups:
             x = torch.cat((x, h.pop()), dim=1)
-            x = block1(x, t)
+            x = block1(x, t,c_emb)
 
             x = torch.cat((x, h.pop()), dim=1)
-            x = block2(x, t)
+            x = block2(x, t,c_emb)
             x = attn(x)
 
             x = upsample(x)
 
         x = torch.cat((x, r), dim=1)
 
-        x = self.final_res_block(x, t)
+        x = self.final_res_block(x, t,c_emb)
         return self.final_conv(x)

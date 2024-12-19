@@ -36,7 +36,7 @@ def parse_args():
     # parser.add_argument('--seed', type=int, default=1, help='random seed (default: 1)')
     parser.add_argument('--log_interval', type=int, default=100, help='how many batches to wait before logging training status')
     parser.add_argument('--save_model', action='store_true', default=False, help='For Saving the current Model')
-    parser.add_argument('--run_name', type=str, default="DDPM")
+    parser.add_argument('--run_name', type=str, default="linear-schedule")
     parser.add_argument('--dry_run', action='store_true', default=False, help='quickly check a single pass')
     return parser.parse_args()
 
@@ -102,7 +102,7 @@ def test_without_vis(model, testloader, diffusor, device, args):
         for step, (images, labels) in enumerate(tqdm(testloader, desc="Testing")):
             images = images.to(device)
             t = torch.randint(0, args.timesteps, (len(images),), device=device).long()
-            loss = diffusor.p_losses(model, images, t, loss_type="l2")
+            loss = diffusor.p_losses(model, images, t,labels, loss_type="l2")
             total_loss += loss.item()
 
     print(f"Test Loss: {total_loss / len(testloader)}")
@@ -121,7 +121,7 @@ def train(model, trainloader, optimizer, diffusor, epoch, device, args):
 
         # Algorithm 1 line 3: sample t uniformly for every example in the batch
         t = torch.randint(0, timesteps, (len(images),), device=device).long()
-        loss = diffusor.p_losses(model, images, t, loss_type="l2")
+        loss = diffusor.p_losses(model, images, t,labels, loss_type="l2")
 
         loss.backward()
         optimizer.step()
@@ -206,7 +206,9 @@ def run(args):
         remove_files(model_folder)
         print(f"Saving model to {model_save_path}")
         torch.save(model.state_dict(), model_save_path)
-    
+    print("Running model on Test set")
+    test_vis(model, testloader, diffusor, device, reverse_transform,  args, "Test_epoch")
+
     for images, _ in trainloader:
         images = images.to(device)
         visualize_diffusion(images, diffusor, timesteps=timesteps, store_path=save_path,reverse_transform=reverse_transform)
