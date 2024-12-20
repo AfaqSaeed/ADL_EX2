@@ -1,7 +1,16 @@
+import torch
 from torch import nn
 from inspect import isfunction
 from einops.layers.torch import Rearrange
 
+
+class Residual(nn.Module):
+    def __init__(self, fn):
+        super().__init__()
+        self.fn = fn
+
+    def forward(self, x, *args, **kwargs):
+        return self.fn(x, *args, **kwargs) + x
 
 def exists(x):
     return x is not None
@@ -21,14 +30,14 @@ def num_to_groups(num, divisor):
         arr.append(remainder)
     return arr
 
-
-class Residual(nn.Module):
-    def __init__(self, fn):
-        super().__init__()
-        self.fn = fn
-
-    def forward(self, x, *args, **kwargs):
-        return self.fn(x, *args, **kwargs) + x
+def prob_mask_like(shape, prob, device):
+    if prob == 1:
+        mask = torch.ones(shape, device = device, dtype = torch.bool)
+    elif prob == 0:
+        mask = torch.zeros(shape, device = device, dtype = torch.bool)
+    else:
+        mask = torch.zeros(shape, device = device).float().uniform_(0, 1) < prob
+    return mask
 
 
 def Upsample(dim, dim_out=None):
