@@ -14,6 +14,9 @@ from ex02_diffusion_v2 import Diffusion, linear_beta_schedule, cosine_beta_sched
 from torchvision.utils import save_image
 
 import argparse
+import os
+
+os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
 
 
 def parse_args():
@@ -161,9 +164,9 @@ def run(args):
     '''
     optimizer = AdamW(model.parameters(), lr=args.lr)
 
-    my_scheduler = lambda x: sigmoid_beta_schedule(0.0001, 0.2, x)
+    # my_scheduler = lambda x: sigmoid_beta_schedule(0.0001, 0.2, x)
     # my_scheduler = lambda x: linear_beta_schedule(0.0001, 0.02, x)
-    # my_scheduler = lambda x: cosine_beta_schedule(x)
+    my_scheduler = lambda x: cosine_beta_schedule(x)
     diffusor = Diffusion(timesteps, my_scheduler, image_size, device)
     print(f"scheduler: {my_scheduler}")
 

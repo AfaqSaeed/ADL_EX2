@@ -36,11 +36,11 @@ def cosine_beta_schedule(timesteps, s=0.008):
     https://www.analyticsvidhya.com/blog/2024/07/noise-schedules-in-stable-diffusion/
     """
     # TODO (2.3): Implement cosine beta/variance schedule as discussed in the paper mentioned above
-    steps = torch.linspace(0, timesteps, timesteps + 1, dtype=torch.float32)[:-1]  # Exclude endpoint
+    steps = torch.linspace(0, timesteps, steps=timesteps + 1, dtype=torch.float32)  # Exclude endpoint
     alphas = torch.cos(((steps / timesteps) + s) / (1 + s) * torch.pi / 2) ** 2    
     alphas = alphas / alphas[0]
     betas = 1 - (alphas[1:] / alphas[:-1])
-    betas = torch.clamp(betas, min=0.0001, max=0.999)
+    betas = torch.clip(betas, min=0.0001, max=0.2)
     return betas
 
     
@@ -136,7 +136,7 @@ class Diffusion:
         if noise==None:
             noise = torch.randn_like(x_zero,dtype=torch.float32)
         
-        t = t.clamp(0, self.timesteps - 1)
+        t = t.clip(0, self.timesteps - 1)
 
         sqrt_alpha_bar = self.sqrt_alpha_bar[t].view(-1, 1, 1, 1)
         # sqrt_alpha_bar = extract(self.sqrt_alpha_bar,t,x_zero.shape)
@@ -144,6 +144,9 @@ class Diffusion:
         #     self.sqrt_one_minus_alpha_bar, t, x_zero.shape
         # )
         sqrt_one_minus_alpha_bar = self.sqrt_one_minus_alpha_bar[t].view(-1, 1, 1, 1)
+        
+        print(x_zero.shape,sqrt_alpha_bar.shape,sqrt_one_minus_alpha_bar.shape)
+
         return  sqrt_alpha_bar*x_zero + sqrt_one_minus_alpha_bar*noise
         
 
